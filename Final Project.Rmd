@@ -1,0 +1,261 @@
+---
+title: "Final Project"
+author: "Linxi Li T00622714"
+date: "2022-12-03"
+output: html_document
+---
+
+```{r, message=FALSE}
+#install.packages("mice")
+library(mice)
+library(VIM)
+```
+
+## Create data with 50 rows and two columns
+```{r}
+data <- read.csv("/Users/ccc/Desktop/create data1.csv")
+head(data)
+```
+
+## Column X has some missing data
+I am going to show the plot of how the data missing, the red spot represents
+the missing data
+```{r}
+md.pattern(data)
+md.pairs(data)
+```
+We can also draw the data distribution of each column of the data set. 
+
+
+In the figure, the red color indicates the missing values, and the transition 
+colors from black to gray to white indicate the different values, the more 
+transition colors indicate the more scattered data values, and the less 
+transition colors indicate the more concentrated data values.
+
+```{r, message=FALSE}
+matrixplot(data)
+```
+Next, we use the mice() function, which is used to populate the data
+
+## Distribution of 100 imputation
+```{r, results='hide'}
+imputed_Data100 <- mice(data, m=100, maxit = 5, method = 'pmm', seed = 500)
+fit100=with(imputed_Data100,lm(Y ~ X))
+summary(fit100)
+
+#result hide
+```
+
+note that: 
+m, the number of fill matrices for the multi-fill method, default is 5
+maxit, the maximum number of iterations, default is 5
+method, the method used to fill, and pmm is predictive mean matching.
+We can use methods(mice) to see what methods are available.
+
+
+Now, let's see the results of 100 imputation.
+```{r}
+d = matrix(nrow = 100, ncol = 4)
+for (i in seq(1,100)){
+  for (j in seq(1,2)){
+    d[i,j]=fit100$analyses[[i]][[1]][[j]]
+  }
+}
+hist(d[,1],breaks=50,xlab="Intercept", ylab="distribution",main="Intercept Density",
+     col = "cyan3")
+hist(d[,2],breaks=50,xlab="slope of X", ylab="distribution",main="Slope of X",
+     col="lightpink")
+```
+
+Now, we do ten imputations and then select the one with the best results by 
+comparing their $R^2$, which is used to make our data.
+```{r, results='hide'}
+imputed_Data <- mice(data, m=10, maxit = 5, method = 'pmm', seed = 500)
+
+#result hide
+```
+
+## View the result of imputation:
+```{r}
+imputed_Data$imp
+```
+
+View the plot of Sub-panel observations, grouped by independent individual 
+indicators, were populated for the 10 groups of data.
+```{r}
+stripplot(imputed_Data, col=c("grey",mdc(2)),pch=c(1,20))
+```
+
+
+## Analyze the results and optimize the model
+```{r}
+fit=with(imputed_Data,lm(Y ~ X))
+summary(fit)
+```
+
+Using the with() function, a multiple linear regression analysis model was 
+performed on the five interpolated data sets, and a t-test was performed to 
+determine the validity of each variable in the data set.
+
+```{r}
+pooled=pool(fit)
+pool.r.squared(fit)
+```
+
+
+```{r}
+completeData1 <- complete(imputed_Data,1)
+data1 <- lm(Y ~ X, data=completeData1)
+summary(data1)
+```
+
+```{r}
+completeData2 <- complete(imputed_Data,2)
+data2 <- lm(Y ~ X, data=completeData2)
+summary(data2)
+```
+
+```{r}
+completeData3 <- complete(imputed_Data,3)
+data3 <- lm(Y ~ X, data=completeData3)
+summary(data3)
+```
+
+```{r}
+completeData4 <- complete(imputed_Data,4)
+data4 <- lm(Y ~ X, data=completeData4)
+summary(data4)
+```
+
+```{r}
+completeData5 <- complete(imputed_Data,5)
+data5 <- lm(Y ~ X, data=completeData5)
+summary(data5)
+```
+
+```{r}
+completeData6 <- complete(imputed_Data,6)
+data6 <- lm(Y ~ X, data=completeData6)
+summary(data6)
+```
+
+```{r}
+completeData7 <- complete(imputed_Data,7)
+data7 <- lm(Y ~ X, data=completeData7)
+summary(data7)
+```
+
+```{r}
+completeData8 <- complete(imputed_Data,8)
+data8 <- lm(Y ~ X, data=completeData8)
+summary(data8)
+```
+
+```{r}
+completeData9 <- complete(imputed_Data,9)
+data9 <- lm(Y ~ X, data=completeData9)
+summary(data9)
+```
+
+```{r}
+completeData10 <- complete(imputed_Data,10)
+data10 <- lm(Y~X, data=completeData10)
+summary(data10)
+```
+
+By checking the $R^2$, I am going to use the imputation 1, as our missing data.
+However, since the response variable is only 0 or 1, we determined that changing 
+the data is suitable for logistic regression. Therefore, I will perform a logistic 
+regression on this data and find the maximum likelihood in the next steps by applying
+to Optim() and newton method, with the imputation data1 as my final data.
+
+## I can assign x and y from the data , such that:
+```{r}
+x <- completeData1$X
+y <- completeData1$Y
+```
+
+In this project, at the beginning, I used the glm() to estimate the MLE of my data
+by using the family of "binomial". Usually, glm() will give us a more realistic answer. 
+Therefore, we can find out the different by comparing the answers given by optim(), 
+Newton's method to the glm().
+
+## glm()
+```{r}
+mylogit <- glm(y ~ x, family = "binomial"(link = "logit"))
+mylogit
+```
+
+As we know that, b0 is intercept, and b1 represents the slope, so we can get
+our result from glm() that b0 is -0.4604, and b1 is 0.2152.
+
+
+After getting the result from glm(), we can start using optim() to get MLE.
+
+## optim()
+```{r}
+#MLE for logistic
+
+nlogL_logstic <- function(paravec){
+  # paravec[1] - b0
+  # paravec[2] - b1
+  sum(y*paravec[1])+sum(y*paravec[2]*x)-sum(log(1+exp(paravec[1]+paravec[2]*x)))
+  
+}
+
+MLE = optim(c(0,0), #because we have two parameters in the function;
+            fn=nlogL_logstic,
+            method = "L-BFGS-B", 
+            control = list(fnscale = -1), 
+            hessian = FALSE)
+MLE
+```
+
+The optim() gives the result of b0 is -0.4603692, and b1 is 0.2151646, which are 
+very much close to the glm() result. 
+
+Finally, we use Newton's Method to compare by using the derivative of the log 
+likelihood function and derivative of the score function.
+
+## Newton
+```{r, warning=FALSE}
+#Newton of b0 and b1
+nlogL_log <- function(b0,b1){
+  # b0
+  # b1
+  sum(y*(b0+b1*x))-sum(log(1+exp(b0+b1*x)))
+}
+
+nor_MLE_of_Newtown <- function (x, itr, b00=0,b11=0) {
+  # input: x-vector of observations; itr- iteration times; b00,b11 - initial value
+  # output: MLE estimate and maximum log-likelihood value
+  b0<- rep(0,itr+1)
+  b1<- rep(0,itr+1)
+  b0[1] <- b00
+  b1[1] <- b11
+  for (i in 1:itr){
+    #b[n+1] = b[n] - l(bn)/l'(bn)
+    b0[i+1] = b0[i] - (sum(y)-sum(exp(b0[i]+b1[i]*x)/(1+exp(b0[i]+b1[i]*x))))/
+      (-sum((exp(b0[i]+b1[i]*x))/(exp(b0[i]+b1[i]*x)+1)^2))
+      
+    #sigma2[i+1] = sigma[i] - sigma[i] + (1/n * sum((xi - mu)^2))
+    b1[i+1]=b1[i] - (sum(x*y)-sum(x*exp(b0[i]+b1[i]*x)/(1+exp(b0[i]+b1[i]*x))))/
+      (-sum(((x^2)*exp(b0[i]+b1[i]*x))/(exp(b0[i]+b1[i]*x)^2)))
+      
+  }
+  data.frame(b0=b0, b1=b1,log.lik.value=nlogL_log(b0,b1))
+}
+
+
+n<-x
+nor_MLE_of_Newtown(n,150) # iterate 150 times
+```
+
+After iterating 150 times, we can see our result of b0 is -0.46037541, and b1 
+is 0.21516576, which are also close to glm() result.
+
+
+
+
+
+
